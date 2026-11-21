@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>UXP Hybrid Plugin SDK — Bug Reproduction Suite</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="panel-scroll-root">
+        <!-- Global Suite Header -->
+        <header class="suite-header">
+            <h1 class="suite-title">UXP Hybrid Plugin SDK — Direct JS Bug Repro Suite (11 Bugs)</h1>
+            <p class="suite-subtitle">
+                Interactive reproduction suite for all 11 bugs classified as
+                <strong>"Directly Reproducible from JavaScript (against the unmodified sample plugin / addon)"</strong>
+                (#01, #02, #05, #06, #07, #08, #09, #10, #17, #19, #21).
+            </p>
+            <div class="scope-breakdown-box">
+                <div class="scope-breakdown-row">
+                    <span class="badge badge-scope-sdk">SDK CORE BUG (6)</span>
+                    <strong>#01, #05, #06, #07, #08, #09</strong> — Bugs inside <code>src/utilities/</code> (<code>UxpValue.cpp</code>, <code>UxpAddon.h/.cpp</code>). Every hybrid plugin that uses the SDK's C++ helpers inherits these bugs.
+                </div>
+                <div class="scope-breakdown-row">
+                    <span class="badge badge-scope-both">SDK CORE + TEMPLATE ADDON (1)</span>
+                    <strong>#10</strong> — <code>CreateErrorFromException()</code> in <code>src/utilities/UxpAddon.cpp</code> returns an <code>Error</code> object instead of throwing, and <code>template/template-dev/src/module.cpp</code> returns it as a normal JS value.
+                </div>
+                <div class="scope-breakdown-row">
+                    <span class="badge badge-scope-template">TEMPLATE PLUGIN ONLY (3)</span>
+                    <strong>#02, #17, #19</strong> — Bugs only in this sample template (<code>main.js</code> or <code>module.cpp</code>), <strong>not</strong> in the core SDK. Custom plugins written from scratch are unaffected unless they copy-paste template code.
+                </div>
+                <div class="scope-breakdown-row">
+                    <span class="badge badge-scope-docs">SDK DOCS ONLY (1)</span>
+                    <strong>#21</strong> — Broken copy-paste snippet in root <code>README.md</code> (missing <code>await</code> on <code>require("*.uxpaddon")</code>).
+                </div>
+            </div>
+            <div class="status-bar">
+                <div id="addon-status-pill" class="status-pill ready">Native Addon: Loading...</div>
+                <div id="leak-total-pill" class="status-pill metric">Leaked C++ Heap (Bug #05): 0 MB</div>
+                <div id="dialog-leak-pill" class="status-pill dialog-metric">Leaked &lt;dialog&gt; Nodes (Bug #19): 0</div>
+            </div>
+            <div class="global-actions">
+                <button id="btn-run-all-safe" class="action-btn btn-bug">
+                    ▶ Run All Safe Bug Repros (Excludes Hard Crash)
+                </button>
+                <button id="btn-verify-addon" class="action-btn btn-ok">
+                    ✔ Verify Native Addon (my_function)
+                </button>
+                <button id="btn-reset-outputs" class="action-btn btn-neutral">
+                    ↺ Reset Output Logs
+                </button>
+            </div>
+        </header>
+
+        <!-- ===================================================================
+             BUG #01: JS Array Misclassified as Map in UxpValue.cpp
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-01">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #01</span>
+                <span class="badge badge-scope-sdk">SDK CORE BUG (src/utilities/)</span>
+                <span class="badge badge-high">High Severity</span>
+                <span class="badge badge-file">src/utilities/UxpValue.cpp (GetType)</span>
+            </div>
+            <h2 class="bug-title">JS Array Is Misclassified as a Map (Plain Object)</h2>
+            <p class="bug-summary">
+                <strong>[SDK Core Bug — affects all plugins using <code>UxpValue</code>]</strong>
+                In <code>GetType()</code>, <code>case addon_object: return Value::Kind::map;</code> executes
+                <strong>before</strong> <code>uxp_addon_is_array(env, value, &amp;isArray)</code>. Because every
+                JavaScript <code>Array</code> has <code>typeof === "object"</code> (<code>addon_object</code>), the
+                array check is unreachable dead code.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    • Passing an empty array <code>addon.my_echo([])</code> silently mutates its type and returns a plain
+                    Object <code>{}</code> (<code>Array.isArray === false</code>)!<br />
+                    • Passing a non-empty array <code>addon.my_echo(["alpha", "beta", "gamma"])</code> routes the array
+                    into <code>GetMap()</code>. Because N-API's <code>napi_get_property_names</code> converts array
+                    indices to strings (<code>KeyConversionMode::kConvertToString</code>), C++ stores them in
+                    <code>std::map&lt;std::string, Value&gt;</code> and returns a plain Object
+                    <code>{"0": "alpha", "1": "beta", "2": "gamma"}</code> where <code>Array.isArray === false</code>,
+                    <code>.length === undefined</code>, and <code>.map()</code> throws <code>TypeError</code>!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>uxp_addon_is_array</code> is checked before returning <code>Value::Kind::map</code>.
+                    <code>addon.my_echo([])</code> returns <code>[]</code> and
+                    <code>addon.my_echo(["alpha", "beta", "gamma"])</code> returns a real <code>Array</code>
+                    <code>["alpha", "beta", "gamma"]</code> with <code>Array.isArray === true</code> and
+                    <code>.length === 3</code>.
+                </div>
+            </div>
+            <pre class="code-preview">// Bug #01 Repro:
+const emptyResult = addon.my_echo([]); // Returns {} instead of []!
+const listResult  = addon.my_echo(["alpha", "beta", "gamma"]); // Returns {"0":"alpha","1":"beta","2":"gamma"} instead of Array!</pre>
+            <div class="button-row">
+                <button id="btn-bug-01-empty" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #01A: Echo Empty Array [] (Turns into {})
+                </button>
+                <button id="btn-bug-01-nonempty" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #01B: Echo ["alpha", "beta", "gamma"] (Turns into Object {"0":...})
+                </button>
+                <button id="btn-bug-01-expected" class="action-btn btn-ok">
+                    🟢 Compare Working Case: Echo Plain Object { a: "alpha", b: "beta" }
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-01" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-01" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #02: Undefined Variable `result` in testMyAsyncEcho (main.js)
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-02">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #02</span>
+                <span class="badge badge-scope-template">TEMPLATE PLUGIN ONLY (Sample JS)</span>
+                <span class="badge badge-critical">Critical Severity</span>
+                <span class="badge badge-file">template/template-plugin/main.js (testMyAsyncEcho)</span>
+            </div>
+            <h2 class="bug-title">Undeclared Identifier <code>result</code> &amp; Unawaited Promise in <code>testMyAsyncEcho</code></h2>
+            <p class="bug-summary">
+                <strong>[Template Plugin Only — NOT a bug in the C++ SDK]</strong>
+                In the sample plugin's <code>main.js</code>, <code>testMyAsyncEcho()</code> unnecessarily wraps
+                <code>addon.my_echo_async(10)</code> inside
+                <code>new Promise((resolve, reject) =&gt; { ... resolve(result); })</code> and calls
+                <code>resolve(result)</code> synchronously at the end of the executor where <code>result</code> is
+                never declared. Furthermore, <code>return new Promise(...)</code> is not <code>await</code>ed, so the
+                rejection bypasses <code>try / catch</code>.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    Calling <code>testMyAsyncEcho()</code> immediately rejects with
+                    <code>ReferenceError: result is not defined</code> before the C++ task finishes, and its own
+                    <code>try / catch</code> block completely fails to catch the error!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>await addon.my_echo_async(10)</code> directly awaits the native Promise and resolves cleanly
+                    to <code>10</code> after hopping to the Photoshop main thread and back.
+                </div>
+            </div>
+            <pre class="code-preview">// Buggy SDK main.js lines 51-68:
+return new Promise((resolve, reject) =&gt; {
+    const echoAsyncResult = addon.my_echo_async(10);
+    echoAsyncResult.then((val) =&gt; resolve(val)).catch((error) =&gt; reject(error));
+    resolve(result); // &lt;-- ReferenceError: result is not defined!
+});</pre>
+            <div class="button-row">
+                <button id="btn-bug-02-repro" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #02: Run Original Buggy testMyAsyncEcho()
+                </button>
+                <button id="btn-bug-02-expected" class="action-btn btn-ok">
+                    🟢 Demonstrate Correct Behavior: await addon.my_echo_async(10)
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-02" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-02" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #05: Extreme Native C++ Heap Memory Leak in Value Constructor
+             =================================================================== -->
+        <section class="bug-section danger-zone" id="section-bug-05">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #05</span>
+                <span class="badge badge-scope-sdk">SDK CORE BUG (src/utilities/)</span>
+                <span class="badge badge-high">High Severity • Extreme Native RAM Leak</span>
+                <span class="badge badge-file">src/utilities/UxpValue.cpp (Value::Value)</span>
+            </div>
+            <h2 class="bug-title">Permanent Native C++ Heap Memory Leak When <code>Value</code> Constructor Throws</h2>
+            <p class="bug-summary">
+                <strong>[SDK Core Bug — affects all plugins using <code>UxpValue</code>]</strong>
+                In <code>Value::Value(addon_env, addon_value)</code>, <code>data.map = new MapType;</code> is allocated
+                with raw <code>new</code> <strong>before</strong> calling <code>GetMap()</code>. In C++, if a
+                constructor throws an exception, the object's destructor <code>~Value()</code> is
+                <strong>never executed</strong>. By passing an object with 32 keys referencing a single 16 MB JS string
+                (costing only 16 MB in V8) followed by <code>z_fail: null</code>, C++ copies
+                <strong>512 MB of <code>std::string</code> buffers onto the native heap per call</strong> and then
+                throws on <code>null</code> — permanently leaking 512 MB / 2 GB / 4 GB of native RAM in
+                <code>Photoshop.exe</code>!
+            </p>
+            <div class="leak-meter-box">
+                <div id="leak-meter-label" class="leak-meter-title">
+                    Cumulative Permanently Leaked Native C++ Heap in This Session: 0 MB (0.00 GB) across 0 leaked std::map containers
+                </div>
+                <div class="leak-meter-bar-bg">
+                    <div id="leak-meter-fill" class="leak-meter-bar-fill"></div>
+                </div>
+                <div style="font-size: 11px; color: #fca5a5;">
+                    Tip: Open Windows Task Manager → Details / Processes → watch <strong>Photoshop.exe</strong> memory jump by +512 MB or +2 GB per click and never come back even after V8 GC!
+                </div>
+            </div>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    Each call copies 32 × 16 MB = <strong>512 MB</strong> into native C++ <code>std::string</code> heap
+                    allocations inside <code>*(data.map)</code>, then hits <code>z_fail: null</code>, throws
+                    <code>"unsupported type"</code>, and skips <code>~Value()</code>. All 512 MB per call is leaked
+                    forever in <code>Photoshop.exe</code>!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>data.map</code> is managed by <code>std::unique_ptr&lt;MapType&gt;</code> (or deleted in a
+                    constructor <code>catch</code> block before rethrowing), so all 512 MB of partial allocations are
+                    immediately freed on exception (0 MB leaked).
+                </div>
+            </div>
+            <pre class="code-preview">// 16 MB JS string referenced 32 times (16 MB in JS, but 32 x 16 MB = 512 MB copied in C++!):
+const chunk16MB = "X".repeat(16 * 1024 * 1024);
+const payload = { k00: chunk16MB, k01: chunk16MB, /* ... k31: chunk16MB, */ z_fail: null };
+addon.my_echo(payload); // Copies 512 MB into C++ std::map, throws on null, leaks all 512 MB!</pre>
+            <div class="button-row">
+                <button id="btn-bug-05-512mb" class="action-btn btn-bug">
+                    🔥 Reproduce Bug #05 (+512 MB Native C++ Leak — 1 Call)
+                </button>
+                <button id="btn-bug-05-2gb" class="action-btn btn-crash">
+                    🔥🔥 Reproduce Bug #05 (+2,048 MB / 2.0 GB Extreme Native Leak — 4 Calls)
+                </button>
+                <button id="btn-bug-05-4gb" class="action-btn btn-crash">
+                    💥 Reproduce Bug #05 (+4,096 MB / 4.0 GB Extreme Native Leak — 8 Calls)
+                </button>
+                <button id="btn-bug-05-control" class="action-btn btn-ok">
+                    🟢 Control Test: Echo 512 MB Valid Object Without null (0 MB Leaked)
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-05" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-05" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #06: JS null and Other Types Unsupported in UxpValue.cpp
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-06">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #06</span>
+                <span class="badge badge-scope-sdk">SDK CORE BUG (src/utilities/)</span>
+                <span class="badge badge-high">Medium-High Severity</span>
+                <span class="badge badge-file">src/utilities/UxpValue.cpp (GetType)</span>
+            </div>
+            <h2 class="bug-title">JS <code>null</code> (and <code>function</code>, <code>symbol</code>, <code>bigint</code>) Unsupported in <code>UxpValue</code></h2>
+            <p class="bug-summary">
+                <strong>[SDK Core Bug — affects all plugins using <code>UxpValue</code>]</strong>
+                <code>GetType()</code> handles <code>addon_undefined</code>, <code>addon_boolean</code>,
+                <code>addon_number</code>, <code>addon_string</code>, and <code>addon_object</code>, but omits
+                <code>addon_null</code>. Passing <code>null</code> or any JSON object containing a <code>null</code>
+                property throws <code>"unsupported type"</code>.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    <code>addon.my_echo(null)</code> and
+                    <code>addon.my_echo({ layerId: 1, name: "Background", parentGroup: null })</code> both fail with
+                    <code>Error: unknown exception</code> (code <code>"-1"</code>).
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>addon_null</code> maps to <code>Value::Kind::null</code> and converts back via
+                    <code>uxp_addon_get_null</code>, preserving <code>null</code> properties in JSON payloads.
+                </div>
+            </div>
+            <pre class="code-preview">const res1 = addon.my_echo(null);
+const res2 = addon.my_echo({ layerId: 1, name: "Background", parentGroup: null });</pre>
+            <div class="button-row">
+                <button id="btn-bug-06-null" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #06A: Pass Primitive null
+                </button>
+                <button id="btn-bug-06-obj" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #06B: Pass Object With null Field ({ parentGroup: null })
+                </button>
+                <button id="btn-bug-06-expected" class="action-btn btn-ok">
+                    🟢 Demonstrate Workaround: Use undefined Instead of null
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-06" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-06" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #07: GetMap Property Enumeration Flaws
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-07">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #07</span>
+                <span class="badge badge-scope-sdk">SDK CORE BUG (src/utilities/)</span>
+                <span class="badge badge-high">Medium-High Severity</span>
+                <span class="badge badge-file">src/utilities/UxpValue.cpp (GetMap)</span>
+            </div>
+            <h2 class="bug-title"><code>GetMap()</code> Prototype-Chain Pollution, Silent Key Collisions &amp; Reordering</h2>
+            <p class="bug-summary">
+                <strong>[SDK Core Bug — affects all plugins using <code>UxpValue</code>]</strong>
+                <code>GetMap()</code> calls <code>uxp_addon_get_property_names</code> (which uses
+                <code>v8::KeyCollectionMode::kIncludePrototypes</code> instead of own properties only), extracts keys via
+                <code>GetString()</code> (without <code>uxp_addon_coerce_to_string</code> and truncating at
+                <code>\0</code>), and inserts into <code>std::map&lt;std::string, Value&gt;</code> via
+                <code>map.emplace(...)</code>.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    • <strong>Prototype Crash:</strong> Any object whose prototype has an enumerable method (where
+                    <code>JSON.stringify(obj)</code> succeeds) fails with <code>Error: unknown exception</code> because
+                    <code>GetMap()</code> walks the prototype chain and chokes on the inherited function!<br />
+                    • <strong>Silent Key Collision:</strong> Keys sharing a prefix before <code>\0</code> (e.g.
+                    <code>"ch\0_R"</code>, <code>"ch\0_G"</code>, <code>"ch\0_B"</code>) collide in
+                    <code>std::map::emplace</code>, silently dropping 2 of the 3 properties!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>GetMap()</code> filters to own enumerable properties, coerces keys safely, and preserves all
+                    distinct keys and insertion order without failing on prototype methods.
+                </div>
+            </div>
+            <pre class="code-preview">const pixel = Object.create({ toCss() { return "rgb(...)"; } });
+pixel.r = 255; pixel.g = 128; pixel.b = 0;
+addon.my_echo(pixel); // Fails with Error: unknown exception (walks prototype &amp; hits toCss)!
+addon.my_echo({ "ch\0_R": "Red", "ch\0_G": "Green", "ch\0_B": "Blue" }); // Drops 2 of 3 keys!</pre>
+            <div class="button-row">
+                <button id="btn-bug-07-repro" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #07: Prototype Crash &amp; Silent Key Collision in GetMap()
+                </button>
+                <button id="btn-bug-07-expected" class="action-btn btn-ok">
+                    🟢 Compare Working Case: Own String Keys Without Prototype Methods
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-07" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-07" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #08: GetString Truncates Strings With Embedded Null Bytes (\0)
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-08">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #08</span>
+                <span class="badge badge-scope-sdk">SDK CORE BUG (src/utilities/)</span>
+                <span class="badge badge-medium">Medium Severity • Silent Data Loss</span>
+                <span class="badge badge-file">src/utilities/UxpValue.cpp (GetString)</span>
+            </div>
+            <h2 class="bug-title"><code>GetString()</code> Silently Truncates Strings at the First Embedded Null Byte (<code>\0</code>)</h2>
+            <p class="bug-summary">
+                <strong>[SDK Core Bug — affects all plugins using <code>UxpValue</code>]</strong>
+                <code>uxp_addon_get_value_string_utf8</code> writes all <code>actualLength</code> UTF-8 bytes into
+                <code>buffer</code>, including embedded <code>\0</code> characters. However, line 52 constructs the C++
+                string with <code>std::string(&amp;buffer[0])</code> (which uses <code>strlen</code> and stops at the
+                first <code>\0</code>) instead of <code>std::string(buffer.data(), actualLength)</code>.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    Passing a 48-character string <code>"HEADER_VISIBLE\0CONFIDENTIAL_PAYLOAD_9876543210"</code>
+                    returns only <code>"HEADER_VISIBLE"</code> (14 characters). <strong>34 characters (70.8% of the
+                    data) are silently lost!</strong>
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>std::string(buffer.data(), actualLength)</code> preserves the full 48-byte string including
+                    the embedded <code>\0</code> byte.
+                </div>
+            </div>
+            <pre class="code-preview">const input  = "HEADER_VISIBLE\0CONFIDENTIAL_PAYLOAD_9876543210"; // length: 48
+const output = addon.my_echo(input);                              // length: 14 ("HEADER_VISIBLE")!</pre>
+            <div class="button-row">
+                <button id="btn-bug-08-repro" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #08: Echo String With Embedded \0 (Silent Truncation!)
+                </button>
+                <button id="btn-bug-08-expected" class="action-btn btn-ok">
+                    🟢 Compare Working Case: Echo String Without \0 (Full Length Preserved)
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-08" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-08" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #09: SDK Throws const char* Literals & Native Crash in Photoshop
+             =================================================================== -->
+        <section class="bug-section danger-zone" id="section-bug-09">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #09</span>
+                <span class="badge badge-scope-sdk">SDK CORE BUG (src/utilities/)</span>
+                <span class="badge badge-critical">Critical Severity • Diagnostic Loss &amp; Host Crash</span>
+                <span class="badge badge-file">src/utilities/UxpAddon.h, UxpAddon.cpp, UxpValue.cpp</span>
+            </div>
+            <h2 class="bug-title">SDK Throws Raw <code>const char*</code> Literals (Swallowed as <code>"unknown exception"</code>) &amp; Unhandled Native Crash</h2>
+            <p class="bug-summary">
+                <strong>[SDK Core Bug — affects all plugins using <code>UxpAddon</code> / <code>UxpValue</code>]</strong>
+                Every <code>throw</code> in the C++ SDK throws a raw C-string literal (<code>throw "unsupported type"</code>,
+                <code>throw "invalid status"</code>, etc.), which does <strong>not</strong> inherit from
+                <code>std::exception</code>. In <code>CreateErrorFromException</code>,
+                <code>catch (std::exception&amp;)</code> misses every SDK exception and falls into
+                <code>catch (...)</code>, erasing all diagnostic messages into <code>"unknown exception"</code>.
+                Worse, <code>UXP_ADDON_INIT</code> / <code>UXP_ADDON_TERMINATE</code> have no <code>catch (...)</code>
+                at all, and <code>GetMap()</code> in <code>UxpValue.cpp</code> has no cycle or recursion guard —
+                causing cyclic objects to trigger an uncatchable native C++ stack overflow
+                (<code>0xC00000FD STATUS_STACK_OVERFLOW</code>) that <strong>instantly crashes Photoshop</strong>!
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    • <strong>Button 9A:</strong> 5 completely different C++ exceptions (<code>"unsupported type"</code>
+                    vs <code>"invalid status"</code>) all miss <code>catch (std::exception&amp;)</code> and return the
+                    exact same useless <code>Error: unknown exception</code>.<br />
+                    • <strong>Button 9B / 9C (REAL CRASH):</strong> Passing a self-referential object
+                    <code>cyclic.self = cyclic</code> into <code>addon.my_echo(cyclic)</code> recurses infinitely in
+                    native C++ <code>GetMap()</code> and <strong>immediately crashes Adobe Photoshop to desktop</strong>!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    SDK throws <code>std::runtime_error(...)</code> so <code>catch (const std::exception&amp;)</code>
+                    preserves the exact failure reason, <code>UXP_ADDON_INIT</code> / <code>TERMINATE</code> include
+                    <code>catch (...)</code>, and <code>GetMap()</code> checks recursion depth / visited objects instead
+                    of crashing Photoshop.
+                </div>
+            </div>
+            <pre class="code-preview">// 9A — All C++ const char* messages are lost and replaced with "unknown exception":
+addon.my_echo(Symbol("x"));   // C++ throws "unsupported type" -&gt; JS gets Error("unknown exception")
+addon.my_echo({ 0: "val" });  // C++ throws "invalid status"   -&gt; JS gets Error("unknown exception")
+
+// 9B — Instant Native C++ Crash of Photoshop.exe (STATUS_STACK_OVERFLOW 0xC00000FD in sample-uxp-addon.uxpaddon):
+const cyclic = { reason: "Uncaught native recursion in GetMap()" };
+cyclic.self = cyclic;
+addon.my_echo(cyclic); // 💥 CRASHES PHOTOSHOP IMMEDIATELY!</pre>
+            <div class="button-row">
+                <button id="btn-bug-09-messages" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #09A: Trigger 5 C++ const char* Throws (All Erased to "unknown exception")
+                </button>
+                <button id="btn-bug-09-crash-sync" class="action-btn btn-crash">
+                    💥 CRASH PHOTOSHOP NOW (Bug #09B: Sync Native Stack Overflow in my_echo)
+                </button>
+                <button id="btn-bug-09-crash-async" class="action-btn btn-crash">
+                    💥 CRASH PHOTOSHOP NOW (Bug #09C: Async Native Crash in my_echo_async)
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-09" class="output-status-banner">Not run yet — click 9A for safe repro, or 9B/9C to genuinely crash Photoshop!</div>
+                <pre id="output-bug-09" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #10: CreateErrorFromException Returns Error Value Instead of Throwing
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-10">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #10</span>
+                <span class="badge badge-scope-both">SDK CORE + TEMPLATE ADDON</span>
+                <span class="badge badge-high">High Severity</span>
+                <span class="badge badge-file">src/utilities/UxpAddon.cpp + module.cpp</span>
+            </div>
+            <h2 class="bug-title"><code>CreateErrorFromException()</code> Returns an <code>Error</code> Object as a Normal Return Value Instead of Throwing</h2>
+            <p class="bug-summary">
+                <strong>[SDK Core + Template Addon Bug]</strong>
+                Instead of calling <code>uxp_addon_throw_error</code> and returning <code>nullptr</code>, the SDK's
+                <code>CreateErrorFromException</code> (in <code>src/utilities/UxpAddon.cpp</code>) calls
+                <code>uxp_addon_create_error</code> and returns the <code>Error</code> object as the function's normal
+                return value (and fails when a JS exception is already pending). As a result, JavaScript
+                <code>try / catch</code> blocks are completely bypassed, and calling <code>.then()</code> on
+                <code>addon.my_echo_async(invalidArg)</code> crashes the JS caller with a synchronous
+                <code>TypeError</code> because an <code>Error</code> object was returned instead of a <code>Promise</code>!
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    • <strong>10A (Sync):</strong> <code>try { const r = addon.my_echo(() =&gt; {}); } catch (e) {}</code>
+                    <strong>never enters <code>catch (e)</code></strong>! <code>r</code> is assigned an
+                    <code>Error</code> instance as if the call succeeded!<br />
+                    • <strong>10B (Async):</strong> <code>addon.my_echo_async(() =&gt; {}).then(...)</code> synchronously
+                    returns an <code>Error</code> object instead of a <code>Promise</code>, throwing
+                    <code>TypeError: addon.my_echo_async(...).then is not a function</code>!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>CreateErrorFromException</code> calls <code>uxp_addon_throw_error(env, "-1", msg)</code> and
+                    returns <code>nullptr</code>, so V8 raises a real JavaScript exception caught by
+                    <code>try / catch</code>.
+                </div>
+            </div>
+            <pre class="code-preview">// 10A: try/catch is completely bypassed!
+try {
+    const res = addon.my_echo(() =&gt; {}); // Does NOT throw! Returns Error object into `res`!
+} catch (err) {
+    // NEVER REACHED!
+}
+
+// 10B: Async function returns Error instead of Promise!
+addon.my_echo_async(() =&gt; {}).then(console.log); // TypeError: ...then is not a function!</pre>
+            <div class="button-row">
+                <button id="btn-bug-10-sync" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #10A: Sync try / catch Bypassed (Returns Error Value)
+                </button>
+                <button id="btn-bug-10-async" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #10B: Async my_echo_async().then() Throws Sync TypeError
+                </button>
+                <button id="btn-bug-10-getter" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #10C: Throwing JS Getter Collides With CreateErrorFromException
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-10" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-10" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #17: Uninitialized arg1 & Missing argc Check in MyEcho / MyAsyncEcho
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-17">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #17</span>
+                <span class="badge badge-scope-template">TEMPLATE ADDON ONLY (Sample C++)</span>
+                <span class="badge badge-high">High Severity</span>
+                <span class="badge badge-file">template/template-dev/src/module.cpp (MyEcho, MyAsyncEcho)</span>
+            </div>
+            <h2 class="bug-title">Uninitialized <code>addon_value arg1</code> on Stack &amp; Missing <code>argc</code> Validation</h2>
+            <p class="bug-summary">
+                <strong>[Template Addon Only — in sample <code>module.cpp</code>, NOT in core SDK <code>src/</code>]</strong>
+                Both <code>MyEcho</code> and <code>MyAsyncEcho</code> declare <code>addon_value arg1;</code> without
+                initializing it to <code>nullptr</code>, call
+                <code>uxp_addon_get_cb_info(env, info, &amp;argc, &amp;arg1, nullptr, nullptr)</code>, and
+                <strong>never check whether <code>argc == 0</code></strong> before passing <code>arg1</code> into
+                <code>Value stdValue(env, arg1)</code>. They also silently ignore any extra arguments beyond index 0.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    Calling <code>addon.my_echo()</code> or <code>await addon.my_echo_async()</code> with
+                    <strong>0 arguments</strong> sets <code>argc = 0</code> in C++, but C++ ignores <code>argc</code>
+                    and blindly constructs <code>Value(env, arg1)</code> (relying purely on the host N-API shim to
+                    fill <code>arg1</code> with <code>undefined</code> instead of crashing on the uninitialized stack
+                    slot <code>[rsp+50h]</code>). Calling with 3 arguments silently drops arguments 2 and 3.
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    Initialize <code>addon_value arg1 = nullptr;</code> and check <code>if (argc &lt; 1)</code> to throw
+                    a clear <code>Expected 1 argument</code> error when called with no arguments.
+                </div>
+            </div>
+            <pre class="code-preview">// C++ in module.cpp:
+addon_value arg1; // UNINITIALIZED on stack!
+size_t argc = 1;
+Check(UxpAddonApis.uxp_addon_get_cb_info(env, info, &amp;argc, &amp;arg1, nullptr, nullptr));
+// Missing: if (argc &lt; 1) { ... }
+Value stdValue(env, arg1);</pre>
+            <div class="button-row">
+                <button id="btn-bug-17-zero-args" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #17: Call my_echo() &amp; my_echo_async() With 0 Arguments (and 3 Arguments)
+                </button>
+                <button id="btn-bug-17-expected" class="action-btn btn-ok">
+                    🟢 Compare Working Case: Call my_echo("Valid Single Argument")
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-17" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-17" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #19: DOM <dialog> Appended to document, Unitless fontSize & DOM Leak
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-19">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #19</span>
+                <span class="badge badge-scope-template">TEMPLATE PLUGIN ONLY (Sample JS)</span>
+                <span class="badge badge-medium">Medium Severity • DOM Corruption &amp; Node Leak</span>
+                <span class="badge badge-file">template/template-plugin/main.js (messageDialog)</span>
+            </div>
+            <h2 class="bug-title"><code>messageDialog()</code> Appends <code>&lt;dialog&gt;</code> to <code>document</code> Instead of <code>document.body</code>, Uses Unitless <code>fontSize = 20</code>, Has No Close Button &amp; Leaks DOM Nodes</h2>
+            <p class="bug-summary">
+                <strong>[Template Plugin Only — NOT a bug in the C++ SDK]</strong>
+                <code>messageDialog()</code> in the sample <code>main.js</code> calls
+                <code>document.appendChild(dialog).showModal()</code> (attaching <code>&lt;dialog&gt;</code> directly to
+                the root <code>Document</code> node instead of <code>document.body</code>), sets unitless
+                <code>dialog.style.fontSize = 20</code>, provides no close button inside the modal, and never removes
+                the <code>&lt;dialog&gt;</code> element after dismissal.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    Appends <code>&lt;dialog&gt;</code> directly to <code>document</code> (outside <code>&lt;body&gt;</code>)
+                    or throws <code>HierarchyRequestError</code>, ignores unitless <code>fontSize = 20</code>, traps the
+                    user in a yellow modal with no close button (our repro auto-closes it after 2 seconds so you aren't
+                    stuck!), and permanently leaks a <code>&lt;dialog&gt;</code> node in the DOM on every click!
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    Appends <code>&lt;dialog&gt;</code> to <code>document.body</code>, uses
+                    <code>dialog.style.fontSize = "20px"</code>, includes a Close button, and calls
+                    <code>dialog.remove()</code> on close (0 leaked DOM nodes).
+                </div>
+            </div>
+            <pre class="code-preview">function messageDialog(message) {
+    let dialog = document.createElement("dialog");
+    dialog.style.alignItems = "center";
+    dialog.textContent = message;
+    dialog.style.fontSize = 20;            // Bug 1: Missing CSS unit ("20px")
+    dialog.style.color = "yellow";         // Bug 2: No close button in modal!
+    document.appendChild(dialog).showModal(); // Bug 3 &amp; 4: Appended to `document` &amp; never removed!
+}</pre>
+            <div class="button-row">
+                <button id="btn-bug-19-repro" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #19: Run Buggy messageDialog() (Auto-Closes After 2s, Leaks Node)
+                </button>
+                <button id="btn-bug-19-expected" class="action-btn btn-ok">
+                    🟢 Demonstrate Correct Behavior: Fixed Modal Dialog (document.body + Close Button + Cleanup)
+                </button>
+                <button id="btn-bug-19-cleanup" class="action-btn btn-neutral">
+                    🧹 Clean Up Leaked &lt;dialog&gt; Nodes
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-19" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-19" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             BUG #21: README.md Missing await on require("sample-uxp-addon.uxpaddon")
+             =================================================================== -->
+        <section class="bug-section" id="section-bug-21">
+            <div class="bug-header">
+                <span class="badge badge-id">Bug #21</span>
+                <span class="badge badge-scope-docs">SDK DOCUMENTATION ONLY (README.md)</span>
+                <span class="badge badge-medium">Medium Severity • Documentation Code Failure</span>
+                <span class="badge badge-file">README.md (Lines 68–70)</span>
+            </div>
+            <h2 class="bug-title"><code>README.md</code> Omits <code>await</code> on <code>require("sample-uxp-addon.uxpaddon")</code></h2>
+            <p class="bug-summary">
+                <strong>[SDK Documentation Only — copy-paste bug in <code>README.md</code>]</strong>
+                <code>README.md</code> instructs developers to load the hybrid addon with
+                <code>const addon = require("sample-uxp-addon.uxpaddon"); addon.my_function();</code>. Even though the
+                comment above it says <em>"Require scanning module via asynchronous call"</em>, it omits
+                <code>await</code>. Because UXP's <code>require("*.uxpaddon")</code> returns a <code>Promise</code>,
+                calling <code>addon.my_function()</code> immediately throws a <code>TypeError</code>.
+            </p>
+            <div class="behavior-grid">
+                <div class="behavior-box buggy">
+                    <span class="behavior-label">🔴 What Happens When Bug Is Present (Actual):</span>
+                    <code>addon</code> is a <code>Promise</code> instance (<code>addon instanceof Promise === true</code>),
+                    so calling <code>addon.my_function()</code> immediately throws
+                    <code>TypeError: addon.my_function is not a function</code>.
+                </div>
+                <div class="behavior-box expected">
+                    <span class="behavior-label">🟢 Expected Behavior (If Fixed):</span>
+                    <code>const addon = await require("sample-uxp-addon.uxpaddon");</code> resolves the Promise to the
+                    native exports object, and <code>addon.my_function()</code> returns <code>"hello world"</code>.
+                </div>
+            </div>
+            <pre class="code-preview">// Buggy README.md snippet:
+const addon = require("sample-uxp-addon.uxpaddon"); // Returns a Promise, NOT the addon!
+addon.my_function(); // Throws TypeError: addon.my_function is not a function</pre>
+            <div class="button-row">
+                <button id="btn-bug-21-repro" class="action-btn btn-bug">
+                    🔴 Reproduce Bug #21: Run Exact README.md Snippet Without await
+                </button>
+                <button id="btn-bug-21-expected" class="action-btn btn-ok">
+                    🟢 Demonstrate Correct Behavior: Run With await require("sample-uxp-addon.uxpaddon")
+                </button>
+            </div>
+            <div class="output-container">
+                <div id="status-bug-21" class="output-status-banner">Not run yet — click a button above.</div>
+                <pre id="output-bug-21" class="output-log">Waiting for execution...</pre>
+            </div>
+        </section>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+/************************************************************************
+ * UXP Hybrid Plugin SDK — Interactive Bug Reproduction Suite Styles
+ * Designed for Adobe Photoshop UXP (Torq layout engine compatible)
+ *************************************************************************/
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #1b1b1b;
+    color: #e6e6e6;
+    font-family: "Adobe Clean", "Segoe UI";
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.panel-scroll-root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px;
+}
+
+/* Header & Global Dashboard */
+.suite-header {
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-left: 4px solid #3b82f6;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+
+.suite-title {
+    margin: 0 0 4px 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.suite-subtitle {
+    margin: 0 0 10px 0;
+    color: #b5b5b5;
+    font-size: 11.5px;
+}
+
+.status-bar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    background-color: #181818;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+
+.status-pill {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
+.status-pill.ready {
+    background-color: #143823;
+    color: #4ade80;
+    border: 1px solid #22c55e;
+}
+
+.status-pill.error {
+    background-color: #3f181c;
+    color: #fca5a5;
+    border: 1px solid #ef4444;
+}
+
+.status-pill.metric {
+    background-color: #262214;
+    color: #fcd34d;
+    border: 1px solid #d97706;
+}
+
+.status-pill.dialog-metric {
+    background-color: #241b35;
+    color: #c4b5fd;
+    border: 1px solid #8b5cf6;
+}
+
+.global-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Bug Card Section */
+.bug-section {
+    background-color: #242424;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    padding: 13px;
+    margin-bottom: 14px;
+}
+
+.bug-section.reproduced {
+    border-color: #ef4444;
+    border-left: 4px solid #ef4444;
+}
+
+.bug-section.verified-ok {
+    border-color: #22c55e;
+    border-left: 4px solid #22c55e;
+}
+
+.bug-section.danger-zone {
+    border: 1px solid #b91c1c;
+    border-left: 4px solid #ef4444;
+    background-color: #271c1d;
+}
+
+.bug-header {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 700;
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+.badge-id {
+    background-color: #1e3a5f;
+    color: #93c5fd;
+    border: 1px solid #3b82f6;
+}
+
+.badge-critical {
+    background-color: #4c1118;
+    color: #fda4af;
+    border: 1px solid #f43f5e;
+}
+
+.badge-high {
+    background-color: #451a1c;
+    color: #fca5a5;
+    border: 1px solid #ef4444;
+}
+
+.badge-medium {
+    background-color: #3f2b12;
+    color: #fcd34d;
+    border: 1px solid #f59e0b;
+}
+
+.badge-file {
+    background-color: #2e2e2e;
+    color: #cccccc;
+    border: 1px solid #484848;
+    font-family: Consolas, "Courier New";
+    white-space: pre;
+}
+
+.badge-scope-sdk {
+    background-color: #3b1747;
+    color: #f0abfc;
+    border: 1px solid #c084fc;
+}
+
+.badge-scope-both {
+    background-color: #3a1a38;
+    color: #f9a8d4;
+    border: 1px solid #f472b6;
+}
+
+.badge-scope-template {
+    background-color: #13393e;
+    color: #67e8f9;
+    border: 1px solid #06b6d4;
+}
+
+.badge-scope-docs {
+    background-color: #292524;
+    color: #d6d3d1;
+    border: 1px solid #78716c;
+}
+
+.scope-breakdown-box {
+    background-color: #1c1d21;
+    border: 1px solid #383b42;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    font-size: 11.5px;
+    color: #d4d4d8;
+}
+
+.scope-breakdown-row {
+    margin-bottom: 4px;
+}
+
+.bug-title {
+    margin: 2px 0 8px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.bug-summary {
+    margin: 0 0 10px 0;
+    color: #d0d0d0;
+    font-size: 12px;
+}
+
+/* Comparison Boxes: What Happens With Bug vs Expected Without Bug */
+.behavior-grid {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+}
+
+.behavior-box {
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 11.5px;
+}
+
+.behavior-box.buggy {
+    background-color: #31191b;
+    border: 1px solid #7f1d1d;
+    border-left: 3px solid #ef4444;
+    color: #fecaca;
+}
+
+.behavior-box.expected {
+    background-color: #152b20;
+    border: 1px solid #14532d;
+    border-left: 3px solid #22c55e;
+    color: #bbf7d0;
+}
+
+.behavior-label {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11px;
+}
+
+.behavior-box.buggy .behavior-label {
+    color: #f87171;
+}
+
+.behavior-box.expected .behavior-label {
+    color: #4ade80;
+}
+
+/* Code snippet preview */
+.code-preview {
+    background-color: #141414;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 7px 9px;
+    margin-bottom: 10px;
+    font-family: Consolas, "Courier New";
+    font-size: 11px;
+    color: #9cdcfe;
+    white-space: pre;
+}
+
+/* Action Buttons */
+.button-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.action-btn {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 6px 11px;
+    font-size: 11.5px;
+    font-weight: 700;
+    margin-right: 8px;
+    margin-bottom: 6px;
+    border: 1px solid transparent;
+    text-align: left;
+}
+
+.action-btn.btn-bug {
+    background-color: #991b1b;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+
+.action-btn.btn-bug:hover {
+    background-color: #b91c1c;
+}
+
+.action-btn.btn-crash {
+    background-color: #7f1d1d;
+    border: 2px solid #f87171;
+    color: #fef2f2;
+}
+
+.action-btn.btn-crash:hover {
+    background-color: #dc2626;
+}
+
+.action-btn.btn-ok {
+    background-color: #166534;
+    border-color: #22c55e;
+    color: #ffffff;
+}
+
+.action-btn.btn-ok:hover {
+    background-color: #15803d;
+}
+
+.action-btn.btn-neutral {
+    background-color: #334155;
+    border-color: #64748b;
+    color: #f8fafc;
+}
+
+.action-btn.btn-neutral:hover {
+    background-color: #475569;
+}
+
+/* Live Diagnostic Output Box */
+.output-container {
+    background-color: #141414;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 8px 10px;
+}
+
+.output-status-banner {
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-weight: 700;
+    font-size: 11px;
+    margin-bottom: 6px;
+    background-color: #262626;
+    color: #a3a3a3;
+}
+
+.output-status-banner.status-bug {
+    background-color: #451518;
+    color: #fca5a5;
+    border: 1px solid #ef4444;
+}
+
+.output-status-banner.status-ok {
+    background-color: #123522;
+    color: #86efac;
+    border: 1px solid #22c55e;
+}
+
+.output-status-banner.status-warn {
+    background-color: #3d280e;
+    color: #fde68a;
+    border: 1px solid #f59e0b;
+}
+
+.output-log {
+    font-family: Consolas, "Courier New";
+    font-size: 11px;
+    color: #e5e5e5;
+    margin: 0;
+    white-space: pre;
+}
+
+/* Memory Leak Meter */
+.leak-meter-box {
+    background-color: #1c1415;
+    border: 1px solid #7f1d1d;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+
+.leak-meter-title {
+    font-weight: 700;
+    color: #fca5a5;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.leak-meter-bar-bg {
+    width: 100%;
+    height: 12px;
+    background-color: #2e2e2e;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.leak-meter-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: #ef4444;
+}
+
+/* Fixed Modal Dialog styling for Bug #19 comparison */
+.fixed-modal-dialog {
+    background-color: #252526;
+    color: #ffffff;
+    border: 2px solid #22c55e;
+    border-radius: 6px;
+    padding: 18px;
+    min-width: 320px;
+}
