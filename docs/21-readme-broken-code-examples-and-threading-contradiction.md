@@ -7,7 +7,7 @@
 **SDK Documentation Only (`README.md`)** — This bug is in the root `README.md` documentation examples and architectural description, not in the compiled SDK headers or sample binary. However, developers who copy-paste the `README.md` snippets into their own plugins will immediately hit runtime `TypeError`s in JS and compile errors in C++.
 
 ## Affected Files
-- [`README.md`](../README.md) (lines 43, 108–111, 170–221)
+- Original SDK `README.md` (lines 43, 108–111, 170–221) — since replaced by the bug-focused root [`README.md`](../README.md); line numbers refer to the file as of commit `dc21035` (`git show dc21035:README.md`)
 - [`template/template-dev/src/module.cpp`](../template/template-dev/src/module.cpp) (lines 117–119)
 
 ## Problematic Code
